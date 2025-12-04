@@ -87,16 +87,19 @@ const isDateExpiringSoon = (dateString) => {
 export default function InventoryScreen({ navigation, route }) {
     const { user } = useContext(AuthContext);
     const [products, setProducts] = useState([]);
+    const [groupedProducts, setGroupedProducts] = useState({});
     const [loading, setLoading] = useState(true);
     const [modalVisible, setModalVisible] = useState(false);
     const [editingProduct, setEditingProduct] = useState(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [filteredProducts, setFilteredProducts] = useState([]);
+    const [filteredGroupedProducts, setFilteredGroupedProducts] = useState({});
     const [activeFilter, setActiveFilter] = useState('all');
     const [saving, setSaving] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
     const [qrImportModalVisible, setQrImportModalVisible] = useState(false);
     const [manualProductCode, setManualProductCode] = useState('');
+    const [expandedGroups, setExpandedGroups] = useState({}); // Track which groups are expanded
 
     // Form state
     const [formData, setFormData] = useState({
@@ -110,6 +113,53 @@ export default function InventoryScreen({ navigation, route }) {
         manufactureDate: '',
         expiryDate: ''
     });
+
+    // Function to group products by name (excluding sold items with quantity = 0)
+    const groupProductsByName = (productsList) => {
+        return productsList.reduce((acc, product) => {
+            // Skip sold products (quantity = 0) from display
+            if (product.quantity <= 0) return acc;
+
+            const baseName = product.name.trim();
+            if (!acc[baseName]) {
+                acc[baseName] = [];
+            }
+            acc[baseName].push(product);
+            return acc;
+        }, {});
+    };
+
+    // Function to flatten grouped products for filters and stats (excluding sold items)
+    const getFlattenedProducts = (grouped) => {
+        return Object.values(grouped).flat().filter(product => product.quantity > 0);
+    };
+
+    // Function to get all products including sold ones for statistics
+    const getAllProductsIncludingSold = () => {
+        return Object.values(groupedProducts).flat();
+    };
+
+    // Toggle group expansion
+    const toggleGroupExpansion = (groupName) => {
+        setExpandedGroups(prev => ({
+            ...prev,
+            [groupName]: !prev[groupName]
+        }));
+    };
+
+    // Expand all groups
+    const expandAllGroups = () => {
+        const allExpanded = {};
+        Object.keys(filteredGroupedProducts).forEach(groupName => {
+            allExpanded[groupName] = true;
+        });
+        setExpandedGroups(allExpanded);
+    };
+
+    // Collapse all groups
+    const collapseAllGroups = () => {
+        setExpandedGroups({});
+    };
 
     useEffect(() => {
         if (!user || !rtdb) {
@@ -136,7 +186,14 @@ export default function InventoryScreen({ navigation, route }) {
 
                 console.log('Products loaded:', productsList.length);
                 setProducts(productsList);
-                setFilteredProducts(productsList);
+
+                // Group products by name (excluding sold items)
+                const grouped = groupProductsByName(productsList);
+                setGroupedProducts(grouped);
+
+                // Initialize filtered grouped products
+                setFilteredGroupedProducts(grouped);
+                setFilteredProducts(getFlattenedProducts(grouped));
                 setLoading(false);
                 setRefreshing(false);
             },
@@ -153,40 +210,77 @@ export default function InventoryScreen({ navigation, route }) {
 
     useEffect(() => {
         filterProducts();
-    }, [searchQuery, activeFilter, products]);
+    }, [searchQuery, activeFilter, groupedProducts]);
 
     const filterProducts = () => {
-        let filtered = products;
+        let filteredGrouped = { ...groupedProducts };
 
         // Apply search filter
         if (searchQuery) {
-            filtered = filtered.filter(product =>
-                product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                product.category?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                product.productCode?.toLowerCase().includes(searchQuery.toLowerCase()) // Search by product code
-            );
+            // Filter each group
+            filteredGrouped = Object.keys(filteredGrouped).reduce((acc, groupName) => {
+                const filteredGroup = filteredGrouped[groupName].filter(product =>
+                    product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                    product.category?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                    product.productCode?.toLowerCase().includes(searchQuery.toLowerCase())
+                );
+
+                if (filteredGroup.length > 0) {
+                    acc[groupName] = filteredGroup;
+                }
+                return acc;
+            }, {});
         }
 
-        // Apply category filter
+        // Apply category/status filter (only for available products)
         if (activeFilter === 'lowStock') {
-            filtered = filtered.filter(product =>
-                product.quantity <= product.lowStockThreshold
-            );
+            filteredGrouped = Object.keys(filteredGrouped).reduce((acc, groupName) => {
+                const filteredGroup = filteredGrouped[groupName].filter(product =>
+                    product.quantity <= product.lowStockThreshold
+                );
+
+                if (filteredGroup.length > 0) {
+                    acc[groupName] = filteredGroup;
+                }
+                return acc;
+            }, {});
         } else if (activeFilter === 'expiring') {
-            filtered = filtered.filter(product =>
-                product.expiryDate && isDateExpiringSoon(product.expiryDate)
-            );
+            filteredGrouped = Object.keys(filteredGrouped).reduce((acc, groupName) => {
+                const filteredGroup = filteredGrouped[groupName].filter(product =>
+                    product.expiryDate && isDateExpiringSoon(product.expiryDate)
+                );
+
+                if (filteredGroup.length > 0) {
+                    acc[groupName] = filteredGroup;
+                }
+                return acc;
+            }, {});
         } else if (activeFilter === 'expired') {
-            filtered = filtered.filter(product =>
-                product.expiryDate && isDateExpired(product.expiryDate)
-            );
+            filteredGrouped = Object.keys(filteredGrouped).reduce((acc, groupName) => {
+                const filteredGroup = filteredGrouped[groupName].filter(product =>
+                    product.expiryDate && isDateExpired(product.expiryDate)
+                );
+
+                if (filteredGroup.length > 0) {
+                    acc[groupName] = filteredGroup;
+                }
+                return acc;
+            }, {});
         } else if (activeFilter !== 'all') {
-            filtered = filtered.filter(product =>
-                product.category === activeFilter
-            );
+            filteredGrouped = Object.keys(filteredGrouped).reduce((acc, groupName) => {
+                const filteredGroup = filteredGrouped[groupName].filter(product =>
+                    product.category === activeFilter
+                );
+
+                if (filteredGroup.length > 0) {
+                    acc[groupName] = filteredGroup;
+                }
+                return acc;
+            }, {});
         }
 
-        setFilteredProducts(filtered);
+        setFilteredGroupedProducts(filteredGrouped);
+        setFilteredProducts(getFlattenedProducts(filteredGrouped));
     };
 
     const handleAddProduct = async () => {
@@ -332,7 +426,7 @@ export default function InventoryScreen({ navigation, route }) {
 
         Alert.alert(
             'Confirm Delete',
-            'Are you sure you want to delete this product?',
+            'Are you sure you want to delete this product permanently?',
             [
                 { text: 'Cancel', style: 'cancel' },
                 {
@@ -368,25 +462,34 @@ export default function InventoryScreen({ navigation, route }) {
         }
 
         try {
-            // Search for product by code
-            const product = products.find(p => 
+            // Search for product by code from all products including sold ones
+            const allProducts = getAllProductsIncludingSold();
+            const product = allProducts.find(p =>
                 p.productCode && p.productCode.toLowerCase() === manualProductCode.toLowerCase().trim()
             );
 
             if (product) {
-                Alert.alert(
-                    'Product Found',
-                    `Product: ${product.name}\nCode: ${product.productCode}\nPrice: LKR ${product.price}\nQuantity: ${product.quantity}`,
-                    [{ text: 'OK' }]
-                );
+                if (product.quantity <= 0) {
+                    Alert.alert(
+                        'Product Sold',
+                        `Product: ${product.name}\nCode: ${product.productCode}\nStatus: Sold Out\n\nThis product is no longer in inventory as it has been sold.`,
+                        [{ text: 'OK' }]
+                    );
+                } else {
+                    Alert.alert(
+                        'Product Found',
+                        `Product: ${product.name}\nCode: ${product.productCode}\nPrice: LKR ${product.price}\nQuantity: ${product.quantity}`,
+                        [{ text: 'OK' }]
+                    );
+                }
             } else {
                 Alert.alert(
                     'Product Not Found',
                     `No product found with code: ${manualProductCode}\n\nWould you like to create a new product?`,
                     [
                         { text: 'Cancel', style: 'cancel' },
-                        { 
-                            text: 'Create New', 
+                        {
+                            text: 'Create New',
                             onPress: () => {
                                 setFormData(prev => ({
                                     ...prev,
@@ -410,11 +513,28 @@ export default function InventoryScreen({ navigation, route }) {
     };
 
     const getStockStatus = (product) => {
-        if (product.quantity <= 0) return { status: 'out-of-stock', text: 'Out of Stock', color: '#f94144' };
         if (product.quantity <= product.lowStockThreshold) return { status: 'low-stock', text: 'Low Stock', color: '#f8961e' };
         if (product.expiryDate && isDateExpired(product.expiryDate)) return { status: 'expired', text: 'Expired', color: '#f94144' };
         if (product.expiryDate && isDateExpiringSoon(product.expiryDate)) return { status: 'expiring', text: 'Expiring Soon', color: '#f9c74f' };
         return { status: 'in-stock', text: 'In Stock', color: '#43aa8b' };
+    };
+
+    const getGroupStockStatus = (productsInGroup) => {
+        let hasExpired = false;
+        let hasLowStock = false;
+        let hasExpiringSoon = false;
+
+        productsInGroup.forEach(product => {
+            if (product.quantity <= product.lowStockThreshold) hasLowStock = true;
+            if (product.expiryDate && isDateExpired(product.expiryDate)) hasExpired = true;
+            if (product.expiryDate && isDateExpiringSoon(product.expiryDate)) hasExpiringSoon = true;
+        });
+
+        // Priority: expired > low-stock > expiring > in-stock
+        if (hasExpired) return { status: 'expired', text: 'Contains Expired', color: '#f94144' };
+        if (hasLowStock) return { status: 'low-stock', text: 'Low Stock Items', color: '#f8961e' };
+        if (hasExpiringSoon) return { status: 'expiring', text: 'Expiring Soon Items', color: '#f9c74f' };
+        return { status: 'in-stock', text: 'All Good', color: '#43aa8b' };
     };
 
     if (loading) {
@@ -435,11 +555,16 @@ export default function InventoryScreen({ navigation, route }) {
         );
     }
 
-    const categories = [...new Set(products.map(p => p.category).filter(Boolean))];
-    const totalProducts = products.length;
-    const lowStockCount = products.filter(p => p.quantity <= p.lowStockThreshold).length;
-    const expiredCount = products.filter(p => p.expiryDate && isDateExpired(p.expiryDate)).length;
-    const expiringSoonCount = products.filter(p => p.expiryDate && isDateExpiringSoon(p.expiryDate)).length;
+    // Get all products including sold ones for statistics
+    const allProducts = getAllProductsIncludingSold();
+    const categories = [...new Set(allProducts.map(p => p.category).filter(Boolean))];
+
+    // Calculate statistics only for available products (quantity > 0)
+    const availableProducts = allProducts.filter(p => p.quantity > 0);
+    const totalProducts = availableProducts.length;
+    const lowStockCount = availableProducts.filter(p => p.quantity <= p.lowStockThreshold).length;
+    const expiredCount = availableProducts.filter(p => p.expiryDate && isDateExpired(p.expiryDate)).length;
+    const expiringSoonCount = availableProducts.filter(p => p.expiryDate && isDateExpiringSoon(p.expiryDate)).length;
 
     return (
         <ImageBackground
@@ -467,44 +592,48 @@ export default function InventoryScreen({ navigation, route }) {
                             <Ionicons name="qr-code" size={16} color={Theme.colors.white} />
                             <Text style={styles.addButtonText}>QR Scan</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity
-                            style={[styles.addButton, { marginLeft: 8 }]}
-                            onPress={() => setModalVisible(true)}
-                        >
-                            <Ionicons name="add" size={16} color={Theme.colors.white} />
-                            <Text style={styles.addButtonText}>Add</Text>
-                        </TouchableOpacity>
                     </View>
                 </View>
 
-                {/* Quick Stats */}
-                <ScrollView 
-                    horizontal 
+                {/* Quick Stats - Improved layout with better text visibility */}
+                <ScrollView
+                    horizontal
                     showsHorizontalScrollIndicator={false}
                     style={styles.statsContainer}
+                    contentContainerStyle={styles.statsContentContainer}
                 >
-                    <View style={styles.statCard}>
+                    <View style={[styles.statCard, styles.availableCard]}>
                         <Text style={styles.statNumber}>{totalProducts}</Text>
-                        <Text style={styles.statLabel}>Total</Text>
+                        <Text style={styles.statLabel} numberOfLines={2} adjustsFontSizeToFit>
+                            Available
+                        </Text>
                     </View>
-                    <View style={[styles.statCard, lowStockCount > 0 && styles.statCardWarning]}>
+                    <View style={[styles.statCard, styles.lowStockCardStat, lowStockCount > 0 && styles.statCardWarning]}>
                         <Text style={styles.statNumber}>{lowStockCount}</Text>
-                        <Text style={styles.statLabel}>Low Stock</Text>
+                        <Text style={styles.statLabel} numberOfLines={2} adjustsFontSizeToFit>
+                            Low Stock
+                        </Text>
                     </View>
-                    <View style={[styles.statCard, expiringSoonCount > 0 && styles.statCardWarning]}>
+                    <View style={[styles.statCard, styles.expiringCardStat, expiringSoonCount > 0 && styles.statCardWarning]}>
                         <Text style={styles.statNumber}>{expiringSoonCount}</Text>
-                        <Text style={styles.statLabel}>Expiring Soon</Text>
+                        <Text style={styles.statLabel} numberOfLines={2} adjustsFontSizeToFit>
+                            Expiring Soon
+                        </Text>
                     </View>
-                    <View style={[styles.statCard, expiredCount > 0 && styles.statCardDanger]}>
+                    <View style={[styles.statCard, styles.expiredCardStat, expiredCount > 0 && styles.statCardDanger]}>
                         <Text style={styles.statNumber}>{expiredCount}</Text>
-                        <Text style={styles.statLabel}>Expired</Text>
+                        <Text style={styles.statLabel} numberOfLines={2} adjustsFontSizeToFit>
+                            Expired
+                        </Text>
                     </View>
-                    <TouchableOpacity 
+                    <TouchableOpacity
                         style={[styles.statCard, styles.importCard]}
                         onPress={handleQRImport}
                     >
-                        <Ionicons name="download" size={20} color={Theme.colors.primary} />
-                        <Text style={[styles.statLabel, { color: Theme.colors.primary }]}>QR Import</Text>
+                        <Ionicons name="download" size={22} color={Theme.colors.primary} style={styles.importIcon} />
+                        <Text style={[styles.statLabel, styles.importLabel]} numberOfLines={2} adjustsFontSizeToFit>
+                            QR Import
+                        </Text>
                     </TouchableOpacity>
                 </ScrollView>
 
@@ -513,7 +642,7 @@ export default function InventoryScreen({ navigation, route }) {
                     <Ionicons name="search" size={20} color={Theme.colors.muted} style={styles.searchIcon} />
                     <TextInput
                         style={styles.searchInput}
-                        placeholder="Search products by name, category, or code..."
+                        placeholder="Search available products by name, category, or code..."
                         value={searchQuery}
                         onChangeText={setSearchQuery}
                         placeholderTextColor={Theme.colors.muted}
@@ -525,70 +654,106 @@ export default function InventoryScreen({ navigation, route }) {
                     ) : null}
                 </View>
 
-                {/* Filter Tabs */}
-                <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    style={styles.filterContainer}
-                    contentContainerStyle={styles.filterContent}
-                >
-                    <TouchableOpacity
-                        style={[styles.filterTab, activeFilter === 'all' && styles.activeFilterTab]}
-                        onPress={() => setActiveFilter('all')}
+                {/* Filter Tabs - Fixed layout with proper sizing */}
+                <View style={styles.filterWrapper}>
+                    <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        style={styles.filterContainer}
+                        contentContainerStyle={styles.filterContentContainer}
                     >
-                        <Text style={[styles.filterText, activeFilter === 'all' && styles.activeFilterText]}>All</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                        style={[styles.filterTab, activeFilter === 'lowStock' && styles.activeFilterTab]}
-                        onPress={() => setActiveFilter('lowStock')}
-                    >
-                        <Text style={[styles.filterText, activeFilter === 'lowStock' && styles.activeFilterText]}>Low Stock</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                        style={[styles.filterTab, activeFilter === 'expiring' && styles.activeFilterTab]}
-                        onPress={() => setActiveFilter('expiring')}
-                    >
-                        <Text style={[styles.filterText, activeFilter === 'expiring' && styles.activeFilterText]}>Expiring Soon</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                        style={[styles.filterTab, activeFilter === 'expired' && styles.activeFilterTab]}
-                        onPress={() => setActiveFilter('expired')}
-                    >
-                        <Text style={[styles.filterText, activeFilter === 'expired' && styles.activeFilterText]}>Expired</Text>
-                    </TouchableOpacity>
-
-                    {categories.map(category => (
                         <TouchableOpacity
-                            key={category}
-                            style={[styles.filterTab, activeFilter === category && styles.activeFilterTab]}
-                            onPress={() => setActiveFilter(category)}
+                            style={[styles.filterTab, activeFilter === 'all' && styles.activeFilterTab]}
+                            onPress={() => setActiveFilter('all')}
                         >
-                            <Text style={[styles.filterText, activeFilter === category && styles.activeFilterText]}>{category}</Text>
+                            <Text style={[styles.filterText, activeFilter === 'all' && styles.activeFilterText]}>
+                                All
+                            </Text>
                         </TouchableOpacity>
-                    ))}
-                </ScrollView>
+
+                        <TouchableOpacity
+                            style={[styles.filterTab, activeFilter === 'lowStock' && styles.activeFilterTab]}
+                            onPress={() => setActiveFilter('lowStock')}
+                        >
+                            <Text style={[styles.filterText, activeFilter === 'lowStock' && styles.activeFilterText]}>
+                                Low Stock
+                            </Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={[styles.filterTab, activeFilter === 'expiring' && styles.activeFilterTab]}
+                            onPress={() => setActiveFilter('expiring')}
+                        >
+                            <Text style={[styles.filterText, activeFilter === 'expiring' && styles.activeFilterText]}>
+                                Expiring Soon
+                            </Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={[styles.filterTab, activeFilter === 'expired' && styles.activeFilterTab]}
+                            onPress={() => setActiveFilter('expired')}
+                        >
+                            <Text style={[styles.filterText, activeFilter === 'expired' && styles.activeFilterText]}>
+                                Expired
+                            </Text>
+                        </TouchableOpacity>
+
+                        {categories.map(category => (
+                            <TouchableOpacity
+                                key={category}
+                                style={[styles.filterTab, activeFilter === category && styles.activeFilterTab]}
+                                onPress={() => setActiveFilter(category)}
+                            >
+                                <Text style={[styles.filterText, activeFilter === category && styles.activeFilterText]}>
+                                    {category}
+                                </Text>
+                            </TouchableOpacity>
+                        ))}
+                    </ScrollView>
+                </View>
+
+                {/* Info Banner about sold products */}
+                {allProducts.length > availableProducts.length && (
+                    <View style={styles.infoBanner}>
+                        <Ionicons name="information-circle" size={16} color={Theme.colors.primary} />
+                        <Text style={styles.infoText}>
+                            Note: {allProducts.length - availableProducts.length} sold product(s) are not shown in inventory
+                        </Text>
+                    </View>
+                )}
+
+                {/* Group Controls */}
+                {Object.keys(filteredGroupedProducts).length > 0 && (
+                    <View style={styles.groupControls}>
+                        <TouchableOpacity
+                            style={styles.groupControlButton}
+                            onPress={expandAllGroups}
+                        >
+                            <Ionicons name="expand" size={16} color={Theme.colors.primary} />
+                            <Text style={styles.groupControlText}>Expand All</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={styles.groupControlButton}
+                            onPress={collapseAllGroups}
+                        >
+                            <Ionicons name="contract" size={16} color={Theme.colors.muted} />
+                            <Text style={styles.groupControlText}>Collapse All</Text>
+                        </TouchableOpacity>
+                    </View>
+                )}
 
                 {/* Products List */}
                 {filteredProducts.length === 0 ? (
                     <View style={styles.emptyState}>
                         <MaterialIcons name="inventory" size={64} color={Theme.colors.muted} />
                         <Text style={styles.emptyStateText}>
-                            {searchQuery ? 'No products found' : 'No products yet'}
+                            {searchQuery ? 'No products found' : 'No products available'}
                         </Text>
                         <Text style={styles.emptyStateSubtext}>
-                            {searchQuery ? 'Try a different search term' : 'Add your first product to get started'}
+                            {searchQuery ? 'Try a different search term' : 'Import products using QR code to get started'}
                         </Text>
                         {!searchQuery && (
                             <View style={styles.emptyStateButtons}>
-                                <TouchableOpacity
-                                    style={styles.emptyStateButton}
-                                    onPress={() => setModalVisible(true)}
-                                >
-                                    <Text style={styles.emptyStateButtonText}>Add Product</Text>
-                                </TouchableOpacity>
                                 <TouchableOpacity
                                     style={[styles.emptyStateButton, styles.secondaryButton]}
                                     onPress={handleQRImport}
@@ -600,100 +765,137 @@ export default function InventoryScreen({ navigation, route }) {
                     </View>
                 ) : (
                     <FlatList
-                        data={filteredProducts}
-                        keyExtractor={(item) => item.id}
+                        data={Object.entries(filteredGroupedProducts)}
+                        keyExtractor={([groupName]) => groupName}
                         refreshControl={
                             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
                         }
-                        renderItem={({ item }) => {
-                            const stockStatus = getStockStatus(item);
-                            const isExpired = item.expiryDate && isDateExpired(item.expiryDate);
-                            const isExpiringSoon = item.expiryDate && isDateExpiringSoon(item.expiryDate);
+                        renderItem={({ item: [groupName, productsInGroup] }) => {
+                            const totalQuantity = productsInGroup.reduce((sum, product) => sum + (product.quantity || 0), 0);
+                            const totalPrice = productsInGroup.reduce((sum, product) => sum + (product.price || 0) * (product.quantity || 0), 0);
+                            const lowestStockStatus = getGroupStockStatus(productsInGroup);
+                            const isExpanded = expandedGroups[groupName] || false;
 
                             return (
                                 <View style={[
-                                    styles.productCard,
-                                    item.quantity <= item.lowStockThreshold && styles.lowStockCard,
-                                    isExpired && styles.expiredCard,
-                                    isExpiringSoon && styles.expiringCard
+                                    styles.groupContainer,
+                                    lowestStockStatus.status === 'low-stock' && styles.lowStockGroupCard,
+                                    lowestStockStatus.status === 'expired' && styles.expiredGroupCard,
+                                    lowestStockStatus.status === 'expiring' && styles.expiringGroupCard
                                 ]}>
-                                    <View style={styles.productHeader}>
-                                        <View style={styles.productInfo}>
-                                            <Text style={styles.productName}>{item.name}</Text>
-                                            {item.productCode && (
-                                                <Text style={styles.productCode}>Code: {item.productCode}</Text>
-                                            )}
-                                            {item.category && (
-                                                <Text style={styles.productCategory}>{item.category}</Text>
-                                            )}
+                                    {/* Group Header - Clickable */}
+                                    <TouchableOpacity
+                                        style={styles.groupHeader}
+                                        onPress={() => toggleGroupExpansion(groupName)}
+                                        activeOpacity={0.7}
+                                    >
+                                        <View style={styles.groupInfo}>
+                                            <View style={styles.groupNameRow}>
+                                                <Text style={styles.groupName}>{groupName}</Text>
+                                                <Ionicons
+                                                    name={isExpanded ? "chevron-up" : "chevron-down"}
+                                                    size={20}
+                                                    color={Theme.colors.muted}
+                                                />
+                                            </View>
+                                            <Text style={styles.groupCount}>
+                                                {productsInGroup.length} variant{productsInGroup.length > 1 ? 's' : ''} • Total: {totalQuantity} units • LKR {totalPrice.toFixed(2)}
+                                            </Text>
                                         </View>
-                                        <View style={styles.priceStockContainer}>
-                                            <Text style={styles.productPrice}>LKR {item.price.toFixed(2)}</Text>
-                                            <View style={[styles.stockBadge, { backgroundColor: stockStatus.color }]}>
-                                                <Text style={styles.stockBadgeText}>{stockStatus.text}</Text>
+                                        <View style={styles.groupStatus}>
+                                            <View style={[styles.stockBadge, { backgroundColor: lowestStockStatus.color }]}>
+                                                <Text style={styles.stockBadgeText}>{lowestStockStatus.text}</Text>
                                             </View>
                                         </View>
-                                    </View>
+                                    </TouchableOpacity>
 
-                                    <View style={styles.productDetails}>
-                                        <View style={styles.detailRow}>
-                                            <Ionicons name="cube" size={16} color={Theme.colors.muted} />
-                                            <Text style={styles.detailText}>Quantity: {item.quantity}</Text>
-                                            {item.lowStockThreshold && (
-                                                <Text style={styles.thresholdText}>(Low: {item.lowStockThreshold})</Text>
-                                            )}
-                                        </View>
+                                    {/* Products in Group - Only show when expanded */}
+                                    {isExpanded && productsInGroup.map((product) => {
+                                        const stockStatus = getStockStatus(product);
+                                        const isExpired = product.expiryDate && isDateExpired(product.expiryDate);
+                                        const isExpiringSoon = product.expiryDate && isDateExpiringSoon(product.expiryDate);
 
-                                        {item.manufactureDate && (
-                                            <View style={styles.detailRow}>
-                                                <Ionicons name="hammer" size={16} color={Theme.colors.muted} />
-                                                <Text style={styles.detailText}>
-                                                    MFD: {formatDateForDisplay(item.manufactureDate)}
-                                                </Text>
+                                        return (
+                                            <View key={product.id} style={styles.productItem}>
+                                                <View style={styles.productHeader}>
+                                                    <View style={styles.productInfo}>
+                                                        {product.productCode && (
+                                                            <Text style={styles.productCode}>Code: {product.productCode}</Text>
+                                                        )}
+                                                        {product.category && (
+                                                            <Text style={styles.productCategory}>{product.category}</Text>
+                                                        )}
+                                                    </View>
+                                                    <View style={styles.priceStockContainer}>
+                                                        <Text style={styles.productPrice}>LKR {product.price.toFixed(2)}</Text>
+                                                        <View style={[styles.productStockBadge, { backgroundColor: stockStatus.color }]}>
+                                                            <Text style={styles.productStockBadgeText}>{stockStatus.text}</Text>
+                                                        </View>
+                                                    </View>
+                                                </View>
+
+                                                <View style={styles.productDetails}>
+                                                    <View style={styles.detailRow}>
+                                                        <Ionicons name="cube" size={16} color={Theme.colors.muted} />
+                                                        <Text style={styles.detailText}>Quantity: {product.quantity}</Text>
+                                                        {product.lowStockThreshold && (
+                                                            <Text style={styles.thresholdText}>(Low: {product.lowStockThreshold})</Text>
+                                                        )}
+                                                    </View>
+
+                                                    {product.manufactureDate && (
+                                                        <View style={styles.detailRow}>
+                                                            <Ionicons name="hammer" size={16} color={Theme.colors.muted} />
+                                                            <Text style={styles.detailText}>
+                                                                MFD: {formatDateForDisplay(product.manufactureDate)}
+                                                            </Text>
+                                                        </View>
+                                                    )}
+
+                                                    {product.expiryDate && (
+                                                        <View style={styles.detailRow}>
+                                                            <Ionicons name="calendar" size={16} color={Theme.colors.muted} />
+                                                            <Text style={[
+                                                                styles.detailText,
+                                                                isExpired && styles.expiredText,
+                                                                isExpiringSoon && styles.expiringText
+                                                            ]}>
+                                                                Expires: {formatDateForDisplay(product.expiryDate)}
+                                                                {isExpired && ' (Expired)'}
+                                                                {isExpiringSoon && !isExpired && ' (Soon)'}
+                                                            </Text>
+                                                        </View>
+                                                    )}
+
+                                                    {product.wholesalePrice > 0 && (
+                                                        <View style={styles.detailRow}>
+                                                            <Ionicons name="business" size={16} color={Theme.colors.muted} />
+                                                            <Text style={styles.detailText}>
+                                                                Cost: LKR {product.wholesalePrice.toFixed(2)}
+                                                            </Text>
+                                                        </View>
+                                                    )}
+                                                </View>
+
+                                                <View style={styles.productActions}>
+                                                    <TouchableOpacity
+                                                        style={styles.actionButton}
+                                                        onPress={() => editProduct(product)}
+                                                    >
+                                                        <Ionicons name="create-outline" size={20} color={Theme.colors.primary} />
+                                                        <Text style={styles.actionButtonText}>Edit</Text>
+                                                    </TouchableOpacity>
+                                                    <TouchableOpacity
+                                                        style={[styles.actionButton, styles.deleteButton]}
+                                                        onPress={() => deleteProduct(product.id)}
+                                                    >
+                                                        <Ionicons name="trash-outline" size={20} color={Theme.colors.danger} />
+                                                        <Text style={[styles.actionButtonText, styles.deleteButtonText]}>Delete</Text>
+                                                    </TouchableOpacity>
+                                                </View>
                                             </View>
-                                        )}
-
-                                        {item.expiryDate && (
-                                            <View style={styles.detailRow}>
-                                                <Ionicons name="calendar" size={16} color={Theme.colors.muted} />
-                                                <Text style={[
-                                                    styles.detailText,
-                                                    isExpired && styles.expiredText,
-                                                    isExpiringSoon && styles.expiringText
-                                                ]}>
-                                                    Expires: {formatDateForDisplay(item.expiryDate)}
-                                                    {isExpired && ' (Expired)'}
-                                                    {isExpiringSoon && !isExpired && ' (Soon)'}
-                                                </Text>
-                                            </View>
-                                        )}
-
-                                        {item.wholesalePrice > 0 && (
-                                            <View style={styles.detailRow}>
-                                                <Ionicons name="business" size={16} color={Theme.colors.muted} />
-                                                <Text style={styles.detailText}>
-                                                    Cost: LKR {item.wholesalePrice.toFixed(2)}
-                                                </Text>
-                                            </View>
-                                        )}
-                                    </View>
-
-                                    <View style={styles.productActions}>
-                                        <TouchableOpacity
-                                            style={styles.actionButton}
-                                            onPress={() => editProduct(item)}
-                                        >
-                                            <Ionicons name="create-outline" size={20} color={Theme.colors.primary} />
-                                            <Text style={styles.actionButtonText}>Edit</Text>
-                                        </TouchableOpacity>
-                                        <TouchableOpacity
-                                            style={[styles.actionButton, styles.deleteButton]}
-                                            onPress={() => deleteProduct(item.id)}
-                                        >
-                                            <Ionicons name="trash-outline" size={20} color={Theme.colors.danger} />
-                                            <Text style={[styles.actionButtonText, styles.deleteButtonText]}>Delete</Text>
-                                        </TouchableOpacity>
-                                    </View>
+                                        );
+                                    })}
                                 </View>
                             );
                         }}
@@ -770,7 +972,7 @@ export default function InventoryScreen({ navigation, route }) {
                     </View>
                 </Modal>
 
-                {/* Add/Edit Product Modal */}
+                {/* Edit Product Modal (Kept for editing existing products) */}
                 <Modal
                     animationType="slide"
                     transparent={true}
@@ -785,7 +987,7 @@ export default function InventoryScreen({ navigation, route }) {
                             <View style={styles.modalContent}>
                                 <View style={styles.modalHeader}>
                                     <Text style={styles.modalTitle}>
-                                        {editingProduct ? 'Edit Product' : 'Add New Product'}
+                                        Edit Product
                                     </Text>
                                     <TouchableOpacity
                                         style={styles.closeButton}
@@ -909,6 +1111,14 @@ export default function InventoryScreen({ navigation, route }) {
                                         <Ionicons name="information-circle" size={16} color={Theme.colors.muted} />
                                         <Text style={styles.dateHintText}>Use DD.MM.YYYY format for dates (e.g., 02.01.2025)</Text>
                                     </View>
+
+                                    {/* Inventory info */}
+                                    <View style={styles.inventoryHint}>
+                                        <Ionicons name="information-circle" size={16} color={Theme.colors.primary} />
+                                        <Text style={styles.inventoryHintText}>
+                                            Note: Products with quantity 0 (sold items) are automatically removed from inventory view
+                                        </Text>
+                                    </View>
                                 </ScrollView>
 
                                 <View style={styles.modalButtons}>
@@ -931,7 +1141,7 @@ export default function InventoryScreen({ navigation, route }) {
                                             <ActivityIndicator size="small" color={Theme.colors.white} />
                                         ) : (
                                             <Text style={styles.saveButtonText}>
-                                                {editingProduct ? 'Update' : 'Save'}
+                                                Update
                                             </Text>
                                         )}
                                     </TouchableOpacity>
@@ -1009,40 +1219,71 @@ const styles = StyleSheet.create({
         paddingHorizontal: Theme.spacing.lg,
         paddingVertical: Theme.spacing.md,
     },
+    statsContentContainer: {
+        paddingRight: Theme.spacing.lg,
+        alignItems: 'center',
+    },
     statCard: {
         backgroundColor: 'rgba(255, 255, 255, 0.95)',
         padding: Theme.spacing.md,
         borderRadius: Theme.borderRadius.md,
+        marginRight: Theme.spacing.md,
+        width: 100, // Reduced width for better fit
+        minHeight: 95, // Slightly increased for text wrapping
         alignItems: 'center',
-        marginRight: Theme.spacing.sm,
-        minWidth: 80,
+        justifyContent: 'center',
         ...Theme.shadows.sm,
     },
-    statCardWarning: {
-        backgroundColor: 'rgba(248, 150, 30, 0.1)',
+    availableCard: {
+        borderLeftWidth: 3,
+        borderLeftColor: Theme.colors.primary,
+    },
+    lowStockCardStat: {
         borderLeftWidth: 3,
         borderLeftColor: Theme.colors.warning,
     },
-    statCardDanger: {
-        backgroundColor: 'rgba(249, 65, 68, 0.1)',
+    expiringCardStat: {
+        borderLeftWidth: 3,
+        borderLeftColor: Theme.colors.warning,
+    },
+    expiredCardStat: {
         borderLeftWidth: 3,
         borderLeftColor: Theme.colors.danger,
+    },
+    statCardWarning: {
+        backgroundColor: 'rgba(248, 150, 30, 0.1)',
+    },
+    statCardDanger: {
+        backgroundColor: 'rgba(249, 65, 68, 0.1)',
     },
     importCard: {
         backgroundColor: 'rgba(67, 97, 238, 0.1)',
         borderLeftWidth: 3,
         borderLeftColor: Theme.colors.primary,
+        paddingVertical: Theme.spacing.md,
+    },
+    importIcon: {
+        marginBottom: 8,
     },
     statNumber: {
         fontSize: 20,
         fontWeight: 'bold',
         color: Theme.colors.dark,
-        marginBottom: 4,
+        marginBottom: 6,
+        textAlign: 'center',
     },
     statLabel: {
-        fontSize: 12,
+        fontSize: 12, // Smaller font size
         color: Theme.colors.muted,
         textAlign: 'center',
+        fontWeight: '500',
+        lineHeight: 14, // Better line height for readability
+        flexWrap: 'wrap',
+    },
+    importLabel: {
+        color: Theme.colors.primary,
+        fontSize: 12,
+        fontWeight: '600',
     },
     searchContainer: {
         flexDirection: 'row',
@@ -1064,21 +1305,26 @@ const styles = StyleSheet.create({
         fontSize: 16,
         color: Theme.colors.dark,
     },
-    filterContainer: {
-        marginHorizontal: Theme.spacing.lg,
-        marginBottom: Theme.spacing.md,
+    filterWrapper: {
+        marginBottom: Theme.spacing.sm,
     },
-    filterContent: {
+    filterContainer: {
+        paddingHorizontal: Theme.spacing.lg,
+    },
+    filterContentContainer: {
         paddingRight: Theme.spacing.lg,
     },
     filterTab: {
         paddingHorizontal: Theme.spacing.lg,
-        paddingVertical: Theme.spacing.sm,
+        paddingVertical: Theme.spacing.md,
         borderRadius: Theme.borderRadius.lg,
         backgroundColor: 'rgba(255, 255, 255, 0.95)',
-        marginRight: Theme.spacing.sm,
+        marginRight: Theme.spacing.md,
         borderWidth: 1,
         borderColor: Theme.colors.border,
+        minWidth: 110, // Increased minWidth for better text display
+        alignItems: 'center',
+        justifyContent: 'center',
     },
     activeFilterTab: {
         backgroundColor: Theme.colors.primary,
@@ -1086,33 +1332,116 @@ const styles = StyleSheet.create({
     },
     filterText: {
         color: Theme.colors.muted,
-        fontWeight: '500',
+        fontWeight: '600',
         fontSize: 14,
+        textAlign: 'center',
     },
     activeFilterText: {
         color: Theme.colors.white,
+    },
+    // Info banner about sold products
+    infoBanner: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: 'rgba(67, 97, 238, 0.1)',
+        padding: Theme.spacing.sm,
+        marginHorizontal: Theme.spacing.lg,
+        marginBottom: Theme.spacing.sm,
+        borderRadius: Theme.borderRadius.md,
+        borderLeftWidth: 3,
+        borderLeftColor: Theme.colors.primary,
+    },
+    infoText: {
+        fontSize: 12,
+        color: Theme.colors.primary,
+        marginLeft: Theme.spacing.sm,
+        flex: 1,
+    },
+    // Group controls
+    groupControls: {
+        flexDirection: 'row',
+        justifyContent: 'flex-end',
+        paddingHorizontal: Theme.spacing.lg,
+        marginBottom: Theme.spacing.sm,
+    },
+    groupControlButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: Theme.spacing.md,
+        paddingVertical: Theme.spacing.sm,
+        marginLeft: Theme.spacing.md,
+    },
+    groupControlText: {
+        fontSize: 12,
+        color: Theme.colors.muted,
+        marginLeft: Theme.spacing.xs,
     },
     listContent: {
         padding: Theme.spacing.lg,
         paddingTop: 0,
         paddingBottom: Theme.spacing.xl,
     },
-    productCard: {
+    groupContainer: {
         backgroundColor: 'rgba(255, 255, 255, 0.95)',
         borderRadius: Theme.borderRadius.md,
-        padding: Theme.spacing.lg,
         marginBottom: Theme.spacing.md,
         ...Theme.shadows.sm,
+        overflow: 'hidden',
     },
-    lowStockCard: {
+    groupHeader: {
+        padding: Theme.spacing.lg,
+        backgroundColor: 'rgba(248, 249, 250, 0.8)',
+        borderBottomWidth: 1,
+        borderBottomColor: Theme.colors.border,
+    },
+    groupInfo: {
+        flex: 1,
+    },
+    groupNameRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: Theme.spacing.xs,
+    },
+    groupName: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        color: Theme.colors.dark,
+        flex: 1,
+    },
+    groupCount: {
+        fontSize: 14,
+        color: Theme.colors.muted,
+    },
+    groupStatus: {
+        position: 'absolute',
+        top: Theme.spacing.lg,
+        right: Theme.spacing.lg,
+    },
+    stockBadge: {
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 12,
+    },
+    stockBadgeText: {
+        color: 'white',
+        fontSize: 10,
+        fontWeight: 'bold',
+    },
+    productItem: {
+        padding: Theme.spacing.lg,
+        borderTopWidth: 1,
+        borderTopColor: Theme.colors.border,
+    },
+    lowStockGroupCard: {
         borderLeftWidth: 4,
         borderLeftColor: Theme.colors.warning,
     },
-    expiredCard: {
+    expiredGroupCard: {
         borderLeftWidth: 4,
         borderLeftColor: Theme.colors.danger,
     },
-    expiringCard: {
+    expiringGroupCard: {
         borderLeftWidth: 4,
         borderLeftColor: Theme.colors.warning,
     },
@@ -1124,12 +1453,6 @@ const styles = StyleSheet.create({
     },
     productInfo: {
         flex: 1,
-    },
-    productName: {
-        fontSize: 18,
-        fontWeight: 'bold',
-        color: Theme.colors.dark,
-        marginBottom: Theme.spacing.xs,
     },
     productCode: {
         fontSize: 14,
@@ -1151,14 +1474,15 @@ const styles = StyleSheet.create({
         color: Theme.colors.primary,
         marginBottom: Theme.spacing.xs,
     },
-    stockBadge: {
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        borderRadius: 12,
+    productStockBadge: {
+        paddingHorizontal: 6,
+        paddingVertical: 3,
+        borderRadius: 10,
+        marginTop: Theme.spacing.xs,
     },
-    stockBadgeText: {
+    productStockBadgeText: {
         color: 'white',
-        fontSize: 10,
+        fontSize: 9,
         fontWeight: 'bold',
     },
     productDetails: {
@@ -1338,6 +1662,20 @@ const styles = StyleSheet.create({
     dateHintText: {
         fontSize: 12,
         color: Theme.colors.muted,
+        marginLeft: Theme.spacing.sm,
+        fontStyle: 'italic',
+    },
+    inventoryHint: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: 'rgba(67, 97, 238, 0.1)',
+        padding: Theme.spacing.md,
+        borderRadius: Theme.borderRadius.md,
+        marginBottom: Theme.spacing.lg,
+    },
+    inventoryHintText: {
+        fontSize: 12,
+        color: Theme.colors.primary,
         marginLeft: Theme.spacing.sm,
         fontStyle: 'italic',
     },
