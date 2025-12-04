@@ -3,8 +3,8 @@ import {
     View,
     Text,
     StyleSheet,
-    ScrollView,
     TouchableOpacity,
+    ScrollView,
     ActivityIndicator,
     RefreshControl,
     SafeAreaView,
@@ -243,7 +243,7 @@ export default function FeedScreen({ navigation }) {
                                 <View style={[styles.statIcon, { backgroundColor: Theme.colors.success + '20' }]}>
                                     <Ionicons name="today" size={24} color={Theme.colors.success} />
                                 </View>
-                                <Text style={styles.statValue}>LKR {salesData.today.toFixed(2)}</Text>
+                                {/* REMOVED: LKR value display */}
                                 <Text style={styles.statLabel}>Today</Text>
                                 <TouchableOpacity
                                     style={styles.miniViewButton}
@@ -256,7 +256,7 @@ export default function FeedScreen({ navigation }) {
                                 <View style={[styles.statIcon, { backgroundColor: Theme.colors.primary + '20' }]}>
                                     <Ionicons name="calendar" size={24} color={Theme.colors.primary} />
                                 </View>
-                                <Text style={styles.statValue}>LKR {salesData.week.toFixed(2)}</Text>
+                                {/* REMOVED: LKR value display */}
                                 <Text style={styles.statLabel}>This Week</Text>
                                 <TouchableOpacity
                                     style={styles.miniViewButton}
@@ -269,7 +269,7 @@ export default function FeedScreen({ navigation }) {
                                 <View style={[styles.statIcon, { backgroundColor: Theme.colors.secondary + '20' }]}>
                                     <Ionicons name="stats-chart" size={24} color={Theme.colors.secondary} />
                                 </View>
-                                <Text style={styles.statValue}>LKR {salesData.month.toFixed(2)}</Text>
+                                {/* REMOVED: LKR value display */}
                                 <Text style={styles.statLabel}>This Month</Text>
                                 <TouchableOpacity
                                     style={styles.miniViewButton}
@@ -360,99 +360,9 @@ export default function FeedScreen({ navigation }) {
                         </View>
                     </View>
 
-                    {/* Reports Section */}
-                    <View style={styles.section}>
-                        <View style={styles.sectionHeader}>
-                            <Text style={styles.sectionTitle}>Reports & Analytics</Text>
-                            <TouchableOpacity
-                                style={styles.viewAllButton}
-                                onPress={() => navigation.navigate('Reports')}
-                            >
-                                <Text style={styles.viewAllText}>View All</Text>
-                            </TouchableOpacity>
-                        </View>
-                        <View style={styles.reportsGrid}>
-                            <TouchableOpacity
-                                style={styles.reportCard}
-                                onPress={() => navigation.navigate('Reports', { reportType: 'sales' })}
-                            >
-                                <View style={[styles.reportIcon, { backgroundColor: Theme.colors.primary + '20' }]}>
-                                    <Ionicons name="trending-up" size={24} color={Theme.colors.primary} />
-                                </View>
-                                <Text style={styles.reportTitle}>Sales Report</Text>
-                                <Text style={styles.reportDescription}>View sales analytics</Text>
-                                <TouchableOpacity style={styles.miniReportButton}>
-                                    <Text style={styles.miniReportButtonText}>View Report</Text>
-                                </TouchableOpacity>
-                            </TouchableOpacity>
+                    {/* REMOVED: Reports & Analytics Section */}
 
-                            <TouchableOpacity
-                                style={styles.reportCard}
-                                onPress={() => navigation.navigate('Reports', { reportType: 'inventory' })}
-                            >
-                                <View style={[styles.reportIcon, { backgroundColor: Theme.colors.success + '20' }]}>
-                                    <MaterialIcons name="inventory" size={24} color={Theme.colors.success} />
-                                </View>
-                                <Text style={styles.reportTitle}>Stock Report</Text>
-                                <Text style={styles.reportDescription}>Inventory analysis</Text>
-                                <TouchableOpacity style={styles.miniReportButton}>
-                                    <Text style={styles.miniReportButtonText}>View Report</Text>
-                                </TouchableOpacity>
-                            </TouchableOpacity>
-
-                            <TouchableOpacity
-                                style={styles.reportCard}
-                                onPress={() => navigation.navigate('Reports', { reportType: 'profit' })}
-                            >
-                                <View style={[styles.reportIcon, { backgroundColor: Theme.colors.warning + '20' }]}>
-                                    <Ionicons name="cash" size={24} color={Theme.colors.warning} />
-                                </View>
-                                <Text style={styles.reportTitle}>Profit Report</Text>
-                                <Text style={styles.reportDescription}>Profit analysis</Text>
-                                <TouchableOpacity style={styles.miniReportButton}>
-                                    <Text style={styles.miniReportButtonText}>View Report</Text>
-                                </TouchableOpacity>
-                            </TouchableOpacity>
-
-                            <TouchableOpacity
-                                style={styles.reportCard}
-                                onPress={() => navigation.navigate('Reports', { reportType: 'performance' })}
-                            >
-                                <View style={[styles.reportIcon, { backgroundColor: Theme.colors.accent + '20' }]}>
-                                    <Ionicons name="analytics" size={24} color={Theme.colors.accent} />
-                                </View>
-                                <Text style={styles.reportTitle}>Performance</Text>
-                                <Text style={styles.reportDescription}>Business metrics</Text>
-                                <TouchableOpacity style={styles.miniReportButton}>
-                                    <Text style={styles.miniReportButtonText}>View Report</Text>
-                                </TouchableOpacity>
-                            </TouchableOpacity>
-                        </View>
-                    </View>
-
-                    {/* Recent Activity Section */}
-                    <View style={styles.section}>
-                        <View style={styles.sectionHeader}>
-                            <Text style={styles.sectionTitle}>Recent Activity</Text>
-                            <TouchableOpacity
-                                style={styles.viewAllButton}
-                                onPress={() => navigation.navigate('Reports')}
-                            >
-                                <Text style={styles.viewAllText}>View Reports</Text>
-                            </TouchableOpacity>
-                        </View>
-                        <View style={styles.emptyState}>
-                            <MaterialIcons name="point-of-sale" size={48} color={Theme.colors.muted} />
-                            <Text style={styles.emptyStateText}>No recent transactions</Text>
-                            <Text style={styles.emptyStateSubtext}>Your sales will appear here</Text>
-                            <TouchableOpacity
-                                style={styles.emptyStateButton}
-                                onPress={() => navigation.navigate('Sales')}
-                            >
-                                <Text style={styles.emptyStateButtonText}>Start Selling</Text>
-                            </TouchableOpacity>
-                        </View>
-                    </View>
+                    {/* REMOVED: Recent Activity Section */}
                 </ScrollView>
             </SafeAreaView>
         </ImageBackground>
@@ -586,15 +496,19 @@ const styles = StyleSheet.create({
     },
     miniViewButton: {
         backgroundColor: Theme.colors.primary,
-        paddingVertical: 6,
-        paddingHorizontal: 12,
+        paddingVertical: 8,
+        paddingHorizontal: 16,
         borderRadius: Theme.borderRadius.sm,
         marginTop: Theme.spacing.xs,
+        minWidth: 80, // Fixed minimum width
+        alignItems: 'center',
+        justifyContent: 'center',
     },
     miniViewButtonText: {
         color: Theme.colors.white,
         fontSize: 12,
         fontWeight: 'bold',
+        textAlign: 'center',
     },
     alertMiniButton: {
         backgroundColor: Theme.colors.warning,
@@ -625,53 +539,6 @@ const styles = StyleSheet.create({
         color: Theme.colors.white,
         fontWeight: 'bold',
         marginTop: Theme.spacing.xs,
-    },
-    reportsGrid: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        justifyContent: 'space-between',
-    },
-    reportCard: {
-        width: '48%',
-        backgroundColor: Theme.colors.light,
-        borderRadius: Theme.borderRadius.md,
-        padding: Theme.spacing.md,
-        alignItems: 'center',
-        marginBottom: Theme.spacing.md,
-        ...Theme.shadows.sm,
-    },
-    reportIcon: {
-        width: 48,
-        height: 48,
-        borderRadius: 24,
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginBottom: Theme.spacing.sm,
-    },
-    reportTitle: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: Theme.colors.dark,
-        textAlign: 'center',
-        marginBottom: Theme.spacing.xs,
-    },
-    reportDescription: {
-        fontSize: 12,
-        color: Theme.colors.muted,
-        textAlign: 'center',
-        lineHeight: 16,
-        marginBottom: Theme.spacing.sm,
-    },
-    miniReportButton: {
-        backgroundColor: Theme.colors.primary,
-        paddingVertical: 6,
-        paddingHorizontal: 12,
-        borderRadius: Theme.borderRadius.sm,
-    },
-    miniReportButtonText: {
-        color: Theme.colors.white,
-        fontSize: 12,
-        fontWeight: 'bold',
     },
     emptyState: {
         alignItems: 'center',
