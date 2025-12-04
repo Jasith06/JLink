@@ -11,12 +11,13 @@ import {
     ScrollView,
     FlatList,
     ActivityIndicator,
-    RefreshControl
+    RefreshControl,
+    Alert
 } from 'react-native';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { AuthContext } from '../AuthContext';
 import { Theme } from '../theme';
-import { ref, onValue } from 'firebase/database';
+import { ref, onValue, remove } from 'firebase/database';
 import { rtdb } from '../firebase';
 
 export default function SalesScreen({ navigation, route }) {
@@ -166,6 +167,24 @@ export default function SalesScreen({ navigation, route }) {
         });
     };
 
+    const handleDeleteSale = async (saleId) => {
+        if (!user || !rtdb) return;
+
+        try {
+            // FIXED: Changed 'rtb' to 'rtdb' - this was the typo
+            const saleRef = ref(rtdb, `users/${user.userId}/sales/${saleId}`);
+            await remove(saleRef);
+
+            // Show success message
+            Alert.alert('Success', 'Sale record deleted');
+
+            // Note: Data will auto-refresh via the real-time listener
+        } catch (error) {
+            console.error('Error deleting sale:', error);
+            Alert.alert('Error', 'Failed to delete sale record');
+        }
+    };
+
     const renderSaleItem = ({ item }) => (
         <View style={styles.saleCard}>
             <View style={styles.saleHeader}>
@@ -211,10 +230,20 @@ export default function SalesScreen({ navigation, route }) {
                 ))}
             </View>
 
-            <View style={[styles.statusBadge, { backgroundColor: Theme.colors.success + '20' }]}>
-                <Text style={[styles.statusText, { color: Theme.colors.success }]}>
-                    {item.status || 'Completed'}
-                </Text>
+            <View style={styles.saleFooter}>
+                <View style={[styles.statusBadge, { backgroundColor: Theme.colors.success + '20' }]}>
+                    <Text style={[styles.statusText, { color: Theme.colors.success }]}>
+                        {item.status || 'Completed'}
+                    </Text>
+                </View>
+
+                {/* Delete Button - Red color, mini size - Deletes immediately on click */}
+                <TouchableOpacity
+                    style={styles.deleteButton}
+                    onPress={() => handleDeleteSale(item.id)}
+                >
+                    <Ionicons name="trash-outline" size={16} color={Theme.colors.white} />
+                </TouchableOpacity>
             </View>
         </View>
     );
@@ -258,11 +287,12 @@ export default function SalesScreen({ navigation, route }) {
                     <View style={styles.placeholder} />
                 </View>
 
-                {/* Stats Cards */}
+                {/* Stats Cards - Fixed layout with proper sizing */}
                 <ScrollView
                     horizontal
                     showsHorizontalScrollIndicator={false}
                     style={styles.statsContainer}
+                    contentContainerStyle={styles.statsContentContainer}
                 >
                     <View style={styles.statCard}>
                         <Text style={styles.statValue}>LKR {salesStats.totalRevenue.toFixed(2)}</Text>
@@ -282,45 +312,48 @@ export default function SalesScreen({ navigation, route }) {
                     </View>
                 </ScrollView>
 
-                {/* Filter Tabs */}
-                <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    style={styles.filterContainer}
-                >
-                    <TouchableOpacity
-                        style={[styles.filterTab, activeFilter === 'today' && styles.activeFilterTab]}
-                        onPress={() => setActiveFilter('today')}
+                {/* Filter Tabs - Fixed layout with proper sizing */}
+                <View style={styles.filterWrapper}>
+                    <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        style={styles.filterContainer}
+                        contentContainerStyle={styles.filterContentContainer}
                     >
-                        <Text style={[styles.filterText, activeFilter === 'today' && styles.activeFilterText]}>
-                            Today
-                        </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                        style={[styles.filterTab, activeFilter === 'week' && styles.activeFilterTab]}
-                        onPress={() => setActiveFilter('week')}
-                    >
-                        <Text style={[styles.filterText, activeFilter === 'week' && styles.activeFilterText]}>
-                            This Week
-                        </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                        style={[styles.filterTab, activeFilter === 'month' && styles.activeFilterTab]}
-                        onPress={() => setActiveFilter('month')}
-                    >
-                        <Text style={[styles.filterText, activeFilter === 'month' && styles.activeFilterText]}>
-                            This Month
-                        </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                        style={[styles.filterTab, activeFilter === 'all' && styles.activeFilterTab]}
-                        onPress={() => setActiveFilter('all')}
-                    >
-                        <Text style={[styles.filterText, activeFilter === 'all' && styles.activeFilterText]}>
-                            All Time
-                        </Text>
-                    </TouchableOpacity>
-                </ScrollView>
+                        <TouchableOpacity
+                            style={[styles.filterTab, activeFilter === 'today' && styles.activeFilterTab]}
+                            onPress={() => setActiveFilter('today')}
+                        >
+                            <Text style={[styles.filterText, activeFilter === 'today' && styles.activeFilterText]}>
+                                Today
+                            </Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={[styles.filterTab, activeFilter === 'week' && styles.activeFilterTab]}
+                            onPress={() => setActiveFilter('week')}
+                        >
+                            <Text style={[styles.filterText, activeFilter === 'week' && styles.activeFilterText]}>
+                                This Week
+                            </Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={[styles.filterTab, activeFilter === 'month' && styles.activeFilterTab]}
+                            onPress={() => setActiveFilter('month')}
+                        >
+                            <Text style={[styles.filterText, activeFilter === 'month' && styles.activeFilterText]}>
+                                This Month
+                            </Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={[styles.filterTab, activeFilter === 'all' && styles.activeFilterTab]}
+                            onPress={() => setActiveFilter('all')}
+                        >
+                            <Text style={[styles.filterText, activeFilter === 'all' && styles.activeFilterText]}>
+                                All Time
+                            </Text>
+                        </TouchableOpacity>
+                    </ScrollView>
+                </View>
 
                 {/* Sales List */}
                 {sales.length === 0 ? (
@@ -343,6 +376,14 @@ export default function SalesScreen({ navigation, route }) {
                         }
                         contentContainerStyle={styles.listContent}
                         showsVerticalScrollIndicator={false}
+                        ListHeaderComponent={
+                            <View style={styles.resultsHeader}>
+                                <Text style={styles.resultsTitle}>
+                                    Showing {sales.length} sale{sales.length !== 1 ? 's' : ''}
+                                </Text>
+                                
+                            </View>
+                        }
                     />
                 )}
             </SafeAreaView>
@@ -396,38 +437,53 @@ const styles = StyleSheet.create({
         paddingHorizontal: Theme.spacing.lg,
         paddingVertical: Theme.spacing.md,
     },
+    statsContentContainer: {
+        paddingRight: Theme.spacing.lg,
+    },
     statCard: {
         backgroundColor: 'rgba(255, 255, 255, 0.95)',
         padding: Theme.spacing.lg,
         borderRadius: Theme.borderRadius.md,
-        marginRight: Theme.spacing.sm,
-        minWidth: 140,
+        marginRight: Theme.spacing.md,
+        width: 160, // Fixed width for better display
+        minHeight: 90, // Fixed height for consistency
         alignItems: 'center',
+        justifyContent: 'center',
         ...Theme.shadows.sm,
     },
     statValue: {
         fontSize: 18,
         fontWeight: 'bold',
         color: Theme.colors.primary,
-        marginBottom: 4,
+        marginBottom: 8,
+        textAlign: 'center',
     },
     statLabel: {
-        fontSize: 12,
+        fontSize: 14,
         color: Theme.colors.muted,
         textAlign: 'center',
+        fontWeight: '500',
+    },
+    filterWrapper: {
+        marginBottom: Theme.spacing.md,
     },
     filterContainer: {
         paddingHorizontal: Theme.spacing.lg,
-        marginBottom: Theme.spacing.md,
+    },
+    filterContentContainer: {
+        paddingRight: Theme.spacing.lg,
     },
     filterTab: {
-        paddingHorizontal: Theme.spacing.lg,
-        paddingVertical: Theme.spacing.sm,
+        paddingHorizontal: Theme.spacing.xl,
+        paddingVertical: Theme.spacing.md,
         borderRadius: Theme.borderRadius.lg,
         backgroundColor: 'rgba(255, 255, 255, 0.95)',
-        marginRight: Theme.spacing.sm,
+        marginRight: Theme.spacing.md,
         borderWidth: 1,
         borderColor: Theme.colors.border,
+        minWidth: 110, // Increased minWidth for better text display
+        alignItems: 'center',
+        justifyContent: 'center',
     },
     activeFilterTab: {
         backgroundColor: Theme.colors.primary,
@@ -435,8 +491,9 @@ const styles = StyleSheet.create({
     },
     filterText: {
         color: Theme.colors.muted,
-        fontWeight: '500',
-        fontSize: 14,
+        fontWeight: '600',
+        fontSize: 15, // Increased font size
+        textAlign: 'center',
     },
     activeFilterText: {
         color: Theme.colors.white,
@@ -444,6 +501,26 @@ const styles = StyleSheet.create({
     listContent: {
         padding: Theme.spacing.lg,
         paddingTop: 0,
+    },
+    resultsHeader: {
+        backgroundColor: 'rgba(255, 255, 255, 0.95)',
+        borderRadius: Theme.borderRadius.md,
+        padding: Theme.spacing.md,
+        marginBottom: Theme.spacing.md,
+        alignItems: 'center',
+        ...Theme.shadows.sm,
+    },
+    resultsTitle: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: Theme.colors.dark,
+        marginBottom: Theme.spacing.xs,
+        textAlign: 'center',
+    },
+    resultsSubtitle: {
+        fontSize: 13,
+        color: Theme.colors.muted,
+        textAlign: 'center',
     },
     saleCard: {
         backgroundColor: 'rgba(255, 255, 255, 0.95)',
@@ -455,10 +532,12 @@ const styles = StyleSheet.create({
     saleHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
+        alignItems: 'flex-start',
         marginBottom: Theme.spacing.md,
     },
     saleInfo: {
         flex: 1,
+        marginRight: Theme.spacing.sm,
     },
     saleId: {
         fontSize: 16,
@@ -472,17 +551,20 @@ const styles = StyleSheet.create({
     },
     amountContainer: {
         alignItems: 'flex-end',
+        flexShrink: 0,
     },
     saleAmount: {
         fontSize: 18,
         fontWeight: 'bold',
         color: Theme.colors.success,
         marginBottom: 4,
+        textAlign: 'right',
     },
     profitBadge: {
         fontSize: 11,
         color: Theme.colors.primary,
         fontWeight: '600',
+        textAlign: 'right',
     },
     customerInfo: {
         flexDirection: 'row',
@@ -515,14 +597,21 @@ const styles = StyleSheet.create({
         fontSize: 14,
         color: Theme.colors.muted,
         flex: 1,
+        marginRight: Theme.spacing.sm,
     },
     itemPrice: {
         fontSize: 14,
         color: Theme.colors.dark,
         fontWeight: '500',
+        flexShrink: 0,
+    },
+    saleFooter: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginTop: Theme.spacing.md,
     },
     statusBadge: {
-        marginTop: Theme.spacing.md,
         paddingVertical: Theme.spacing.xs,
         paddingHorizontal: Theme.spacing.sm,
         borderRadius: Theme.borderRadius.sm,
@@ -531,6 +620,16 @@ const styles = StyleSheet.create({
     statusText: {
         fontSize: 12,
         fontWeight: '600',
+    },
+    // Delete Button Styles
+    deleteButton: {
+        backgroundColor: Theme.colors.danger,
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        justifyContent: 'center',
+        alignItems: 'center',
+        ...Theme.shadows.sm,
     },
     emptyState: {
         flex: 1,
