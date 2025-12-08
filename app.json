@@ -1,0 +1,58 @@
+{
+  "expo": {
+    "name": "J_LINK",
+    "slug": "J_LINK",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "infoPlist": {
+        "NSDocumentsFolderUsageDescription": "Allow JLINK POS to access your documents to import inventory data.",
+        "NSDocumentPickerUsageDescription": "Allow JLINK POS to select JSON files for inventory import.",
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": true
+        }
+      },
+      "bundleIdentifier": "com.y.jasith.jlink"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "permissions": [
+        "android.permission.INTERNET",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.CAMERA"
+      ],
+      "package": "com.y.jasith.jlink",
+      "versionCode": 1
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-document-picker",
+        {
+          "iCloudContainerEnvironment": "Production"
+        }
+      ],
+      "expo-barcode-scanner",
+      "expo-font"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "e69815d1-c403-476b-9fb5-c3eca28ff85a"
+      }
+    }
+  }
+}
