@@ -1,12 +1,13 @@
 import React from 'react';
-import { View, Text } from 'react-native';
+import { View, Text, Platform } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { AuthProvider, AuthContext } from './AuthContext';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 
-// Screens
+// Screens (keep all imports as before)
 import SplashScreen from './screens/SplashScreen';
 import LoginScreen from './screens/LoginScreen';
 import CreateAccountScreen from './screens/CreateAccountScreen';
@@ -17,7 +18,7 @@ import SalesScreen from './screens/SalesScreen';
 import ReportsScreen from './screens/ReportsScreen';
 import ProfileSettingsScreen from './screens/ProfileSettingsScreen';
 import ProfileScreen from './screens/ProfileScreen';
-import QRImportScreen from './screens/QRImportScreen'; // NEW
+import QRImportScreen from './screens/QRImportScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -29,13 +30,27 @@ function MainTabs() {
         tabBarActiveTintColor: '#4285F4',
         tabBarInactiveTintColor: '#666',
         tabBarStyle: {
-          paddingBottom: 5,
-          height: 60,
+          height: Platform.OS === 'ios' ? 85 : 65, // Adjusted heights
+          paddingBottom: Platform.OS === 'ios' ? 25 : 8, // Adjusted padding
+          paddingTop: 10,
+          backgroundColor: '#ffffff',
+          borderTopWidth: 1,
+          borderTopColor: '#eee',
+          // Android specific shadow
+          ...(Platform.OS === 'android' && {
+            elevation: 8,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: -2 },
+            shadowOpacity: 0.1,
+            shadowRadius: 3,
+          }),
         },
         tabBarLabelStyle: {
           fontSize: 12,
-          marginBottom: 5,
+          marginBottom: Platform.OS === 'ios' ? 0 : 6,
+          fontWeight: '600',
         },
+        headerShown: false,
       }}
     >
       <Tab.Screen
@@ -45,7 +60,6 @@ function MainTabs() {
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="home" size={size} color={color} />
           ),
-          headerShown: false,
         }}
       />
       <Tab.Screen
@@ -55,7 +69,6 @@ function MainTabs() {
           tabBarIcon: ({ color, size }) => (
             <MaterialIcons name="inventory" size={size} color={color} />
           ),
-          headerShown: false,
         }}
       />
       <Tab.Screen
@@ -65,7 +78,6 @@ function MainTabs() {
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="cash" size={size} color={color} />
           ),
-          headerShown: false,
         }}
       />
       <Tab.Screen
@@ -75,7 +87,6 @@ function MainTabs() {
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="person" size={size} color={color} />
           ),
-          headerShown: false,
         }}
       />
     </Tab.Navigator>
@@ -124,8 +135,10 @@ function RootNavigator() {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <RootNavigator />
-    </AuthProvider>
+    <SafeAreaProvider>
+      <AuthProvider>
+        <RootNavigator />
+      </AuthProvider>
+    </SafeAreaProvider>
   );
 }
